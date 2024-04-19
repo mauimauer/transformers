@@ -50,30 +50,19 @@ from .configuration_xlm import XLMConfig
 
 logger = logging.get_logger(__name__)
 
-_CHECKPOINT_FOR_DOC = "xlm-mlm-en-2048"
+_CHECKPOINT_FOR_DOC = "FacebookAI/xlm-mlm-en-2048"
 _CONFIG_FOR_DOC = "XLMConfig"
 
-XLM_PRETRAINED_MODEL_ARCHIVE_LIST = [
-    "xlm-mlm-en-2048",
-    "xlm-mlm-ende-1024",
-    "xlm-mlm-enfr-1024",
-    "xlm-mlm-enro-1024",
-    "xlm-mlm-tlm-xnli15-1024",
-    "xlm-mlm-xnli15-1024",
-    "xlm-clm-enfr-1024",
-    "xlm-clm-ende-1024",
-    "xlm-mlm-17-1280",
-    "xlm-mlm-100-1280",
-    # See all XLM models at https://huggingface.co/models?filter=xlm
-]
+
+from ..deprecated._archive_maps import XLM_PRETRAINED_MODEL_ARCHIVE_LIST  # noqa: F401, E402
 
 
 def create_sinusoidal_embeddings(n_pos, dim, out):
     position_enc = np.array([[pos / np.power(10000, 2 * (j // 2) / dim) for j in range(dim)] for pos in range(n_pos)])
+    out.requires_grad = False
     out[:, 0::2] = torch.FloatTensor(np.sin(position_enc[:, 0::2]))
     out[:, 1::2] = torch.FloatTensor(np.cos(position_enc[:, 1::2]))
     out.detach_()
-    out.requires_grad = False
 
 
 def get_masks(slen, lengths, causal, padding_mask=None):
@@ -176,7 +165,8 @@ class MultiHeadAttention(nn.Module):
                     k, v = cache[self.layer_id]
             cache[self.layer_id] = (k, v)
 
-        scores = torch.matmul(q, k.transpose(2, 3)) / math.sqrt(dim_per_head)  # (bs, n_heads, qlen, klen)
+        q = q / math.sqrt(dim_per_head)  # (bs, n_heads, qlen, dim_per_head)
+        scores = torch.matmul(q, k.transpose(2, 3))  # (bs, n_heads, qlen, klen)
         mask = (mask == 0).view(mask_reshape).expand_as(scores)  # (bs, n_heads, qlen, klen)
         scores.masked_fill_(mask, torch.finfo(scores.dtype).min)  # (bs, n_heads, qlen, klen)
 
@@ -255,6 +245,10 @@ class XLMPreTrainedModel(PreTrainedModel):
         if isinstance(module, nn.LayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
+        if isinstance(module, XLMModel) and self.config.sinusoidal_embeddings:
+            create_sinusoidal_embeddings(
+                self.config.max_position_embeddings, self.config.emb_dim, out=module.position_embeddings.weight
+            )
 
 
 @dataclass
@@ -296,8 +290,8 @@ class XLMForQuestionAnsweringOutput(ModelOutput):
     end_top_log_probs: Optional[torch.FloatTensor] = None
     end_top_index: Optional[torch.LongTensor] = None
     cls_logits: Optional[torch.FloatTensor] = None
-    hidden_states: Optional[Tuple[torch.FloatTensor]] = None
-    attentions: Optional[Tuple[torch.FloatTensor]] = None
+    hidden_states: Optional[Tuple[torch.FloatTensor, ...]] = None
+    attentions: Optional[Tuple[torch.FloatTensor, ...]] = None
 
 
 XLM_START_DOCSTRING = r"""
@@ -390,8 +384,6 @@ XLM_INPUTS_DOCSTRING = r"""
     XLM_START_DOCSTRING,
 )
 class XLMModel(XLMPreTrainedModel):
-    _keys_to_ignore_on_load_missing = [r"position_ids"]
-
     def __init__(self, config):
         super().__init__(config)
 
@@ -426,8 +418,6 @@ class XLMModel(XLMPreTrainedModel):
 
         # embeddings
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, self.dim)
-        if config.sinusoidal_embeddings:
-            create_sinusoidal_embeddings(config.max_position_embeddings, self.dim, out=self.position_embeddings.weight)
         if config.n_langs > 1 and config.use_lang_emb:
             self.lang_embeddings = nn.Embedding(self.n_langs, self.dim)
         self.embeddings = nn.Embedding(self.n_words, self.dim, padding_idx=self.pad_index)
@@ -460,7 +450,9 @@ class XLMModel(XLMPreTrainedModel):
 
         # Initialize weights and apply final processing
         self.post_init()
-        self.register_buffer("position_ids", torch.arange(config.max_position_embeddings).expand((1, -1)))
+        self.register_buffer(
+            "position_ids", torch.arange(config.max_position_embeddings).expand((1, -1)), persistent=False
+        )
 
     def get_input_embeddings(self):
         return self.embeddings
@@ -669,7 +661,7 @@ class XLMPredLayer(nn.Module):
     XLM_START_DOCSTRING,
 )
 class XLMWithLMHeadModel(XLMPreTrainedModel):
-    _keys_to_ignore_on_load_missing = ["pred_layer.proj.weight"]
+    _tied_weights_keys = ["pred_layer.proj.weight"]
 
     def __init__(self, config):
         super().__init__(config)
@@ -1029,8 +1021,8 @@ class XLMForQuestionAnswering(XLMPreTrainedModel):
         >>> from transformers import AutoTokenizer, XLMForQuestionAnswering
         >>> import torch
 
-        >>> tokenizer = AutoTokenizer.from_pretrained("xlm-mlm-en-2048")
-        >>> model = XLMForQuestionAnswering.from_pretrained("xlm-mlm-en-2048")
+        >>> tokenizer = AutoTokenizer.from_pretrained("FacebookAI/xlm-mlm-en-2048")
+        >>> model = XLMForQuestionAnswering.from_pretrained("FacebookAI/xlm-mlm-en-2048")
 
         >>> input_ids = torch.tensor(tokenizer.encode("Hello, my dog is cute", add_special_tokens=True)).unsqueeze(
         ...     0

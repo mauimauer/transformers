@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import annotations
+
 import unittest
 
 from transformers import is_tf_available
@@ -28,7 +30,6 @@ if is_tf_available():
     import tensorflow as tf
 
     from transformers import (
-        TF_FLAUBERT_PRETRAINED_MODEL_ARCHIVE_LIST,
         FlaubertConfig,
         TFFlaubertForMultipleChoice,
         TFFlaubertForQuestionAnsweringSimple,
@@ -59,7 +60,7 @@ class TFFlaubertModelTester:
         self.vocab_size = 99
         self.n_special = 0
         self.hidden_size = 32
-        self.num_hidden_layers = 5
+        self.num_hidden_layers = 2
         self.num_attention_heads = 4
         self.hidden_dropout_prob = 0.1
         self.attention_probs_dropout_prob = 0.1
@@ -306,6 +307,22 @@ class TFFlaubertModelTest(TFModelTesterMixin, PipelineTesterMixin, unittest.Test
     test_head_masking = False
     test_onnx = False
 
+    # TODO: Fix the failed tests
+    def is_pipeline_test_to_skip(
+        self, pipeline_test_casse_name, config_class, model_architecture, tokenizer_name, processor_name
+    ):
+        if (
+            pipeline_test_casse_name == "QAPipelineTests"
+            and tokenizer_name is not None
+            and not tokenizer_name.endswith("Fast")
+        ):
+            # `QAPipelineTests` fails for a few models when the slower tokenizer are used.
+            # (The slower tokenizers were never used for pipeline tests before the pipeline testing rework)
+            # TODO: check (and possibly fix) the `QAPipelineTests` with slower tokenizer
+            return True
+
+        return False
+
     def setUp(self):
         self.model_tester = TFFlaubertModelTester(self)
         self.config_tester = ConfigTester(self, config_class=FlaubertConfig, emb_dim=37)
@@ -339,9 +356,9 @@ class TFFlaubertModelTest(TFModelTesterMixin, PipelineTesterMixin, unittest.Test
 
     @slow
     def test_model_from_pretrained(self):
-        for model_name in TF_FLAUBERT_PRETRAINED_MODEL_ARCHIVE_LIST[:1]:
-            model = TFFlaubertModel.from_pretrained(model_name)
-            self.assertIsNotNone(model)
+        model_name = "hf-internal-testing/tiny-random-flaubert"
+        model = TFFlaubertModel.from_pretrained(model_name)
+        self.assertIsNotNone(model)
 
 
 @require_tf

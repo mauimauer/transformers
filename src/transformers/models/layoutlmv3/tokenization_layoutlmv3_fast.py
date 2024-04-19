@@ -45,22 +45,6 @@ logger = logging.get_logger(__name__)
 
 VOCAB_FILES_NAMES = {"vocab_file": "vocab.json", "merges_file": "merges.txt", "tokenizer_file": "tokenizer.json"}
 
-PRETRAINED_VOCAB_FILES_MAP = {
-    "vocab_file": {
-        "microsoft/layoutlmv3-base": "https://huggingface.co/microsoft/layoutlmv3-base/raw/main/vocab.json",
-        "microsoft/layoutlmv3-large": "https://huggingface.co/microsoft/layoutlmv3-large/raw/main/vocab.json",
-    },
-    "merges_file": {
-        "microsoft/layoutlmv3-base": "https://huggingface.co/microsoft/layoutlmv3-base/raw/main/merges.txt",
-        "microsoft/layoutlmv3-large": "https://huggingface.co/microsoft/layoutlmv3-large/raw/main/merges.txt",
-    },
-}
-
-PRETRAINED_POSITIONAL_EMBEDDINGS_SIZES = {
-    "microsoft/layoutlmv3-base": 512,
-    "microsoft/layoutlmv3-large": 512,
-}
-
 
 class LayoutLMv3TokenizerFast(PreTrainedTokenizerFast):
     r"""
@@ -131,8 +115,6 @@ class LayoutLMv3TokenizerFast(PreTrainedTokenizerFast):
     """
 
     vocab_files_names = VOCAB_FILES_NAMES
-    pretrained_vocab_files_map = PRETRAINED_VOCAB_FILES_MAP
-    max_model_input_sizes = PRETRAINED_POSITIONAL_EMBEDDINGS_SIZES
     model_input_names = ["input_ids", "attention_mask"]
     slow_tokenizer_class = LayoutLMv3Tokenizer
 
@@ -508,7 +490,6 @@ class LayoutLMv3TokenizerFast(PreTrainedTokenizerFast):
             **kwargs,
         )
 
-    # Copied from transformers.models.layoutlmv2.tokenization_layoutlmv2_fast.LayoutLMv2TokenizerFast._batch_encode_plus with LayoutLMv2->LayoutLMv3
     def _batch_encode_plus(
         self,
         batch_text_or_text_pairs: Union[
@@ -640,6 +621,7 @@ class LayoutLMv3TokenizerFast(PreTrainedTokenizerFast):
                 else:
                     original_index = batch_index
                 labels_example = []
+                previous_token_empty = False
                 for id, offset, word_id in zip(
                     sanitized_tokens["input_ids"][batch_index],
                     sanitized_tokens["offset_mapping"][batch_index],
@@ -647,11 +629,15 @@ class LayoutLMv3TokenizerFast(PreTrainedTokenizerFast):
                 ):
                     if word_id is not None:
                         if self.only_label_first_subword:
-                            if offset[0] == 0:
+                            if offset[0] == 0 and not previous_token_empty:
                                 # Use the real label id for the first token of the word, and padding ids for the remaining tokens
                                 labels_example.append(word_labels[original_index][word_id])
                             else:
                                 labels_example.append(self.pad_token_label)
+                            if offset == (0, 0):
+                                previous_token_empty = True
+                            else:
+                                previous_token_empty = False
                         else:
                             labels_example.append(word_labels[original_index][word_id])
                     else:

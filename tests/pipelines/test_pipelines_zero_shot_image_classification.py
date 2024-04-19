@@ -78,9 +78,15 @@ class ZeroShotImageClassificationPipelineTests(unittest.TestCase):
         image = Image.open("./tests/fixtures/tests_samples/COCO/000000039769.png")
         output = image_classifier(image, candidate_labels=["a", "b", "c"])
 
-        self.assertEqual(
+        # The floating scores are so close, we enter floating error approximation and the order is not guaranteed across
+        # python and torch versions.
+        self.assertIn(
             nested_simplify(output),
-            [{"score": 0.333, "label": "a"}, {"score": 0.333, "label": "b"}, {"score": 0.333, "label": "c"}],
+            [
+                [{"score": 0.333, "label": "a"}, {"score": 0.333, "label": "b"}, {"score": 0.333, "label": "c"}],
+                [{"score": 0.333, "label": "a"}, {"score": 0.333, "label": "c"}, {"score": 0.333, "label": "b"}],
+                [{"score": 0.333, "label": "b"}, {"score": 0.333, "label": "a"}, {"score": 0.333, "label": "c"}],
+            ],
         )
 
         output = image_classifier([image] * 5, candidate_labels=["A", "B", "C"], batch_size=2)
@@ -232,6 +238,40 @@ class ZeroShotImageClassificationPipelineTests(unittest.TestCase):
                     {"score": 0.485, "label": "cat"},
                     {"score": 0.004, "label": "plane"},
                 ],
+            ]
+            * 5,
+        )
+
+    @slow
+    @require_torch
+    def test_siglip_model_pt(self):
+        image_classifier = pipeline(
+            task="zero-shot-image-classification",
+            model="google/siglip-base-patch16-224",
+        )
+        # This is an image of 2 cats with remotes and no planes
+        image = Image.open("./tests/fixtures/tests_samples/COCO/000000039769.png")
+        output = image_classifier(image, candidate_labels=["2 cats", "a plane", "a remote"])
+
+        self.assertEqual(
+            nested_simplify(output),
+            [
+                {"score": 0.198, "label": "2 cats"},
+                {"score": 0.0, "label": "a remote"},
+                {"score": 0.0, "label": "a plane"},
+            ],
+        )
+
+        output = image_classifier([image] * 5, candidate_labels=["2 cats", "a plane", "a remote"], batch_size=2)
+
+        self.assertEqual(
+            nested_simplify(output),
+            [
+                [
+                    {"score": 0.198, "label": "2 cats"},
+                    {"score": 0.0, "label": "a remote"},
+                    {"score": 0.0, "label": "a plane"},
+                ]
             ]
             * 5,
         )

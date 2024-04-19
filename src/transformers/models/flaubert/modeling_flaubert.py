@@ -16,7 +16,6 @@
 
 import itertools
 import math
-import random
 from dataclasses import dataclass
 from typing import Dict, Optional, Tuple, Union
 
@@ -52,22 +51,17 @@ logger = logging.get_logger(__name__)
 _CHECKPOINT_FOR_DOC = "flaubert/flaubert_base_cased"
 _CONFIG_FOR_DOC = "FlaubertConfig"
 
-FLAUBERT_PRETRAINED_MODEL_ARCHIVE_LIST = [
-    "flaubert/flaubert_small_cased",
-    "flaubert/flaubert_base_uncased",
-    "flaubert/flaubert_base_cased",
-    "flaubert/flaubert_large_cased",
-    # See all Flaubert models at https://huggingface.co/models?filter=flaubert
-]
+
+from ..deprecated._archive_maps import FLAUBERT_PRETRAINED_MODEL_ARCHIVE_LIST  # noqa: F401, E402
 
 
 # Copied from transformers.models.xlm.modeling_xlm.create_sinusoidal_embeddings
 def create_sinusoidal_embeddings(n_pos, dim, out):
     position_enc = np.array([[pos / np.power(10000, 2 * (j // 2) / dim) for j in range(dim)] for pos in range(n_pos)])
+    out.requires_grad = False
     out[:, 0::2] = torch.FloatTensor(np.sin(position_enc[:, 0::2]))
     out[:, 1::2] = torch.FloatTensor(np.cos(position_enc[:, 1::2]))
     out.detach_()
-    out.requires_grad = False
 
 
 # Copied from transformers.models.xlm.modeling_xlm.get_masks
@@ -172,7 +166,8 @@ class MultiHeadAttention(nn.Module):
                     k, v = cache[self.layer_id]
             cache[self.layer_id] = (k, v)
 
-        scores = torch.matmul(q, k.transpose(2, 3)) / math.sqrt(dim_per_head)  # (bs, n_heads, qlen, klen)
+        q = q / math.sqrt(dim_per_head)  # (bs, n_heads, qlen, dim_per_head)
+        scores = torch.matmul(q, k.transpose(2, 3))  # (bs, n_heads, qlen, klen)
         mask = (mask == 0).view(mask_reshape).expand_as(scores)  # (bs, n_heads, qlen, klen)
         scores.masked_fill_(mask, torch.finfo(scores.dtype).min)  # (bs, n_heads, qlen, klen)
 
@@ -375,11 +370,13 @@ class FlaubertPreTrainedModel(PreTrainedModel):
         if isinstance(module, nn.LayerNorm):
             module.bias.data.zero_()
             module.weight.data.fill_(1.0)
+        if isinstance(module, FlaubertModel) and self.config.sinusoidal_embeddings:
+            create_sinusoidal_embeddings(
+                self.config.max_position_embeddings, self.config.emb_dim, out=module.position_embeddings.weight
+            )
 
 
 class FlaubertModel(FlaubertPreTrainedModel):
-    _keys_to_ignore_on_load_missing = [r"position_ids"]
-
     def __init__(self, config):  # , dico, is_encoder, with_output):
         super().__init__(config)
 
@@ -414,8 +411,6 @@ class FlaubertModel(FlaubertPreTrainedModel):
 
         # embeddings
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, self.dim)
-        if config.sinusoidal_embeddings:
-            create_sinusoidal_embeddings(config.max_position_embeddings, self.dim, out=self.position_embeddings.weight)
         if config.n_langs > 1 and config.use_lang_emb:
             self.lang_embeddings = nn.Embedding(self.n_langs, self.dim)
         self.embeddings = nn.Embedding(self.n_words, self.dim, padding_idx=self.pad_index)
@@ -448,7 +443,6 @@ class FlaubertModel(FlaubertPreTrainedModel):
 
         # Initialize weights and apply final processing
         self.post_init()
-        self.register_buffer("position_ids", torch.arange(config.max_position_embeddings).expand((1, -1)))
 
         self.layerdrop = getattr(config, "layerdrop", 0.0)
         self.pre_norm = getattr(config, "pre_norm", False)
@@ -579,9 +573,10 @@ class FlaubertModel(FlaubertPreTrainedModel):
         attentions = () if output_attentions else None
         for i in range(self.n_layers):
             # LayerDrop
-            dropout_probability = random.uniform(0, 1)
-            if self.training and (dropout_probability < self.layerdrop):
-                continue
+            if self.training:
+                dropout_probability = torch.rand([])
+                if dropout_probability < self.layerdrop:
+                    continue
 
             if output_hidden_states:
                 hidden_states = hidden_states + (tensor,)
@@ -653,7 +648,7 @@ class FlaubertModel(FlaubertPreTrainedModel):
 )
 # Copied transformers.models.xlm.modeling_xlm.XLMWithLMHeadModel with XLM_INPUTS->FLAUBERT_INPUTS,XLM->Flaubert
 class FlaubertWithLMHeadModel(FlaubertPreTrainedModel):
-    _keys_to_ignore_on_load_missing = ["pred_layer.proj.weight"]
+    _tied_weights_keys = ["pred_layer.proj.weight"]
 
     def __init__(self, config):
         super().__init__(config)
@@ -1145,8 +1140,8 @@ class FlaubertForQuestionAnswering(FlaubertPreTrainedModel):
         >>> from transformers import XLMTokenizer, XLMForQuestionAnswering
         >>> import torch
 
-        >>> tokenizer = XLMTokenizer.from_pretrained("xlm-mlm-en-2048")
-        >>> model = XLMForQuestionAnswering.from_pretrained("xlm-mlm-en-2048")
+        >>> tokenizer = XLMTokenizer.from_pretrained("FacebookAI/xlm-mlm-en-2048")
+        >>> model = XLMForQuestionAnswering.from_pretrained("FacebookAI/xlm-mlm-en-2048")
 
         >>> input_ids = torch.tensor(tokenizer.encode("Hello, my dog is cute", add_special_tokens=True)).unsqueeze(
         ...     0

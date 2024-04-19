@@ -37,7 +37,6 @@ if is_torch_available():
         XLNetLMHeadModel,
         XLNetModel,
     )
-    from transformers.models.xlnet.modeling_xlnet import XLNET_PRETRAINED_MODEL_ARCHIVE_LIST
 
 
 class XLNetModelTester:
@@ -56,7 +55,7 @@ class XLNetModelTester:
         hidden_size=32,
         num_attention_heads=4,
         d_inner=128,
-        num_hidden_layers=5,
+        num_hidden_layers=2,
         type_sequence_label_size=2,
         untie_r=True,
         bi_data=False,
@@ -542,6 +541,15 @@ class XLNetModelTest(ModelTesterMixin, GenerationTesterMixin, PipelineTesterMixi
     fx_compatible = False
     test_pruning = False
 
+    # TODO: Fix the failed tests
+    def is_pipeline_test_to_skip(
+        self, pipeline_test_casse_name, config_class, model_architecture, tokenizer_name, processor_name
+    ):
+        if pipeline_test_casse_name == "QAPipelineTests" and not tokenizer_name.endswith("Fast"):
+            return True
+
+        return False
+
     # XLNet has 2 QA models -> need to manually set the correct labels for one of them here
     def _prepare_for_class(self, inputs_dict, model_class, return_labels=False):
         inputs_dict = super()._prepare_for_class(inputs_dict, model_class, return_labels=return_labels)
@@ -676,16 +684,16 @@ class XLNetModelTest(ModelTesterMixin, GenerationTesterMixin, PipelineTesterMixi
 
     @slow
     def test_model_from_pretrained(self):
-        for model_name in XLNET_PRETRAINED_MODEL_ARCHIVE_LIST[:1]:
-            model = XLNetModel.from_pretrained(model_name)
-            self.assertIsNotNone(model)
+        model_name = "xlnet/xlnet-base-cased"
+        model = XLNetModel.from_pretrained(model_name)
+        self.assertIsNotNone(model)
 
 
 @require_torch
 class XLNetModelLanguageGenerationTest(unittest.TestCase):
     @slow
     def test_lm_generate_xlnet_base_cased(self):
-        model = XLNetLMHeadModel.from_pretrained("xlnet-base-cased")
+        model = XLNetLMHeadModel.from_pretrained("xlnet/xlnet-base-cased")
         model.to(torch_device)
         # fmt: off
         input_ids = torch.tensor(

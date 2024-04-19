@@ -25,13 +25,21 @@ Jump to the [Add new model like section](#add-new-model-like-command) to learn h
 
 ## Cookiecutter Templates
 
-Using the `cookiecutter` utility requires to have all the `dev` dependencies installed. Let's first clone the 
+Using the `cookiecutter` utility requires to have all the `dev` dependencies installed. Let's first clone the
 repository and install it in our environment:
 
 ```shell script
 git clone https://github.com/huggingface/transformers
 cd transformers
 pip install -e ".[dev]"
+```
+
+Depending on your OS, and since the number of optional dependencies of Transformers is growing, you might get a
+failure with this command. If that's the case make sure to install the Deep Learning framework you are working with
+(PyTorch, TensorFlow and/or Flax) then do:
+
+```bash
+pip install -e ".[quality]"
 ```
 
 Once the installation is done, you can use the CLI command `add-new-model` to generate your models:
@@ -45,20 +53,20 @@ This should launch the `cookiecutter` package which should prompt you to fill in
 The `modelname` should be cased according to the plain text casing, i.e., BERT, RoBERTa, DeBERTa.
 ```
 modelname [<ModelNAME>]:
-uppercase_modelname [<MODEL_NAME>]: 
-lowercase_modelname [<model_name>]: 
-camelcase_modelname [<ModelName>]: 
+uppercase_modelname [<MODEL_NAME>]:
+lowercase_modelname [<model_name>]:
+camelcase_modelname [<ModelName>]:
 ```
 
 Fill in the `authors` with your team members:
 ```
-authors [The HuggingFace Team]: 
+authors [The HuggingFace Team]:
 ```
 
 The checkpoint identifier is the checkpoint that will be used in the examples across the files. Put the name you wish,
 as it will appear on the modelhub. Do not forget to include the organisation.
 ```
-checkpoint_identifier [organisation/<model_name>-base-cased]: 
+checkpoint_identifier [organisation/<model_name>-base-cased]:
 ```
 
 The tokenizer should either be based on BERT if it behaves exactly like the BERT tokenizer, or a standalone otherwise.
@@ -66,42 +74,42 @@ The tokenizer should either be based on BERT if it behaves exactly like the BERT
 Select tokenizer_type:
 1 - Based on BERT
 2 - Standalone
-Choose from 1, 2 [1]: 
+Choose from 1, 2 [1]:
 ```
 <!---
 Choose if your model is an encoder-decoder, or an encoder-only architecture.
 
-If your model is an encoder-only architecture, the generated architecture will be based on the BERT model. 
+If your model is an encoder-only architecture, the generated architecture will be based on the BERT model.
 If your model is an encoder-decoder architecture, the generated architecture will be based on the BART model. You can,
 of course, edit the files once the generation is complete.
 ```
 Select is_encoder_decoder_model:
 1 - True
 2 - False
-Choose from 1, 2 [1]: 
+Choose from 1, 2 [1]:
 ```
 -->
 
 Once the command has finished, you should have a total of 7 new files spread across the repository:
 ```
-docs/source/model_doc/<model_name>.mdx
+docs/source/model_doc/<model_name>.md
 src/transformers/models/<model_name>/configuration_<model_name>.py
 src/transformers/models/<model_name>/modeling_<model_name>.py
 src/transformers/models/<model_name>/modeling_tf_<model_name>.py
 src/transformers/models/<model_name>/tokenization_<model_name>.py
-tests/test_modeling_<model_name>.py
-tests/test_modeling_tf_<model_name>.py
+tests/models/<model_name>/test_modeling_<model_name>.py
+tests/models/<model_name>/test_modeling_tf_<model_name>.py
 ```
 
 You can run the tests to ensure that they all pass:
 
-```
+```bash
 python -m pytest ./tests/test_*<model_name>*.py
 ```
 
-Feel free to modify each file to mimic the behavior of your model. 
+Feel free to modify each file to mimic the behavior of your model.
 
-⚠ You should be careful about the classes preceded by the following line:️ 
+⚠ You should be careful about the classes preceded by the following line:️
 
 ```python
 # Copied from transformers.[...]
@@ -111,8 +119,8 @@ This line ensures that the copy does not diverge from the source. If it *should*
 is different, this line needs to be deleted. If you don't delete this line and run `make fix-copies`,
 your changes will be overwritten.
 
-Once you have edited the files to fit your architecture, simply re-run the tests (and edit them if a change 
-is needed!) afterwards to make sure everything works as expected. 
+Once you have edited the files to fit your architecture, simply re-run the tests (and edit them if a change
+is needed!) afterwards to make sure everything works as expected.
 
 Once the files are generated and you are happy with your changes, here's a checklist to ensure that your contribution
 will be merged quickly:
@@ -131,6 +139,14 @@ first clone the repository and install it in our environment:
 git clone https://github.com/huggingface/transformers
 cd transformers
 pip install -e ".[dev]"
+```
+
+Depending on your OS, and since the number of optional dependencies of Transformers is growing, you might get a
+failure with this command. If that's the case make sure to install the Deep Learning framework you are working with
+(PyTorch, TensorFlow and/or Flax) then do:
+
+```bash
+pip install -e ".[quality]"
 ```
 
 Once the installation is done, you can use the CLI command `add-new-model-like` to generate your models:
@@ -201,7 +217,7 @@ Next the questionnaire will ask
 Should we add # Copied from statements when creating the new modeling file?
 ```
 
-This is the intenal mechanism used in the library to make sure code copied from various modeling files stay consistent.
+This is the internal mechanism used in the library to make sure code copied from various modeling files stay consistent.
 If you plan to completely rewrite the modeling file, you should answer no, whereas if you just want to tweak one part
 of the model, you should answer yes.
 
@@ -220,22 +236,22 @@ depending on your choices).
 
 You will also see a doc file and tests for your new models. First you should run
 
-```
+```bash
 make style
 make fix-copies
 ```
 
 and then you can start tweaking your model. You should:
-- fill the doc file at `docs/source/model_doc/model_name.mdx`
+- fill the doc file at `docs/source/model_doc/model_name.md`
 - tweak the configuration and modeling files to your need
 
 Once you're done, you can run the tests to ensure that they all pass:
 
-```
+```bash
 python -m pytest ./tests/test_*<model_name>*.py
 ```
 
-⚠ You should be careful about the classes preceded by the following line:️ 
+⚠ You should be careful about the classes preceded by the following line:️
 
 ```python
 # Copied from transformers.[...]
@@ -245,8 +261,8 @@ This line ensures that the copy does not diverge from the source. If it *should*
 is different, this line needs to be deleted. If you don't delete this line and run `make fix-copies`,
 your changes will be overwritten.
 
-Once you have edited the files to fit your architecture, simply re-run the tests (and edit them if a change 
-is needed!) afterwards to make sure everything works as expected. 
+Once you have edited the files to fit your architecture, simply re-run the tests (and edit them if a change
+is needed!) afterwards to make sure everything works as expected.
 
 Once the files are generated and you are happy with your changes, here's a checklist to ensure that your contribution
 will be merged quickly:

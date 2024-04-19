@@ -44,6 +44,13 @@ class CamembertTokenizer(metaclass=DummyObject):
         requires_backends(self, ["sentencepiece"])
 
 
+class CodeLlamaTokenizer(metaclass=DummyObject):
+    _backends = ["sentencepiece"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["sentencepiece"])
+
+
 class CpmTokenizer(metaclass=DummyObject):
     _backends = ["sentencepiece"]
 
@@ -72,6 +79,13 @@ class FNetTokenizer(metaclass=DummyObject):
         requires_backends(self, ["sentencepiece"])
 
 
+class GemmaTokenizer(metaclass=DummyObject):
+    _backends = ["sentencepiece"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["sentencepiece"])
+
+
 class GPTSw3Tokenizer(metaclass=DummyObject):
     _backends = ["sentencepiece"]
 
@@ -80,6 +94,13 @@ class GPTSw3Tokenizer(metaclass=DummyObject):
 
 
 class LayoutXLMTokenizer(metaclass=DummyObject):
+    _backends = ["sentencepiece"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["sentencepiece"])
+
+
+class LlamaTokenizer(metaclass=DummyObject):
     _backends = ["sentencepiece"]
 
     def __init__(self, *args, **kwargs):
@@ -163,6 +184,20 @@ class RemBertTokenizer(metaclass=DummyObject):
         requires_backends(self, ["sentencepiece"])
 
 
+class SeamlessM4TTokenizer(metaclass=DummyObject):
+    _backends = ["sentencepiece"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["sentencepiece"])
+
+
+class SiglipTokenizer(metaclass=DummyObject):
+    _backends = ["sentencepiece"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["sentencepiece"])
+
+
 class Speech2TextTokenizer(metaclass=DummyObject):
     _backends = ["sentencepiece"]
 
@@ -178,6 +213,13 @@ class SpeechT5Tokenizer(metaclass=DummyObject):
 
 
 class T5Tokenizer(metaclass=DummyObject):
+    _backends = ["sentencepiece"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["sentencepiece"])
+
+
+class UdopTokenizer(metaclass=DummyObject):
     _backends = ["sentencepiece"]
 
     def __init__(self, *args, **kwargs):

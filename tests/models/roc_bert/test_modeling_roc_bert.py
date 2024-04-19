@@ -39,7 +39,6 @@ if is_torch_available():
         RoCBertForTokenClassification,
         RoCBertModel,
     )
-    from transformers.models.roc_bert.modeling_roc_bert import ROC_BERT_PRETRAINED_MODEL_ARCHIVE_LIST
 
 
 class RoCBertModelTester:
@@ -58,7 +57,7 @@ class RoCBertModelTester:
         pronunciation_embed_dim=32,
         shape_embed_dim=32,
         hidden_size=32,
-        num_hidden_layers=5,
+        num_hidden_layers=2,
         num_attention_heads=4,
         intermediate_size=37,
         hidden_act="gelu",
@@ -586,6 +585,24 @@ class RoCBertModelTest(ModelTesterMixin, PipelineTesterMixin, unittest.TestCase)
         else {}
     )
 
+    # TODO: Fix the failed tests when this model gets more usage
+    def is_pipeline_test_to_skip(
+        self, pipeline_test_casse_name, config_class, model_architecture, tokenizer_name, processor_name
+    ):
+        if pipeline_test_casse_name in [
+            "FillMaskPipelineTests",
+            "FeatureExtractionPipelineTests",
+            "TextClassificationPipelineTests",
+            "TokenClassificationPipelineTests",
+        ]:
+            # Get error: IndexError: index out of range in self.
+            # `word_shape_file` and `word_pronunciation_file` should be shrunk during tiny model creation,
+            # otherwise `IndexError` could occur in some embedding layers. Skip for now until this model has
+            # more usage.
+            return True
+
+        return False
+
     # special case for ForPreTraining model
     def _prepare_for_class(self, inputs_dict, model_class, return_labels=False):
         inputs_dict = super()._prepare_for_class(inputs_dict, model_class, return_labels=return_labels)
@@ -700,9 +717,9 @@ class RoCBertModelTest(ModelTesterMixin, PipelineTesterMixin, unittest.TestCase)
 
     @slow
     def test_model_from_pretrained(self):
-        for model_name in ROC_BERT_PRETRAINED_MODEL_ARCHIVE_LIST[:1]:
-            model = RoCBertModel.from_pretrained(model_name)
-            self.assertIsNotNone(model)
+        model_name = "weiweishi/roc-bert-base-zh"
+        model = RoCBertModel.from_pretrained(model_name)
+        self.assertIsNotNone(model)
 
 
 @require_torch

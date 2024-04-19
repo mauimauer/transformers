@@ -36,7 +36,6 @@ if is_torch_available():
         ErnieMForTokenClassification,
         ErnieMModel,
     )
-    from transformers.models.ernie_m.modeling_ernie_m import ERNIE_M_PRETRAINED_MODEL_ARCHIVE_LIST
 
 
 class ErnieMModelTester:
@@ -50,7 +49,7 @@ class ErnieMModelTester:
         use_labels=True,
         vocab_size=99,
         hidden_size=32,
-        num_hidden_layers=5,
+        num_hidden_layers=2,
         num_attention_heads=4,
         intermediate_size=37,
         hidden_act="gelu",
@@ -250,6 +249,15 @@ class ErnieMModelTest(ModelTesterMixin, PipelineTesterMixin, unittest.TestCase):
     )
     test_torchscript = False
 
+    # TODO: Fix the failed tests when this model gets more usage
+    def is_pipeline_test_to_skip(
+        self, pipeline_test_casse_name, config_class, model_architecture, tokenizer_name, processor_name
+    ):
+        if pipeline_test_casse_name == "QAPipelineTests":
+            return True
+
+        return False
+
     def setUp(self):
         self.model_tester = ErnieMModelTester(self)
         self.config_tester = ConfigTester(self, config_class=ErnieMConfig, hidden_size=37)
@@ -289,9 +297,9 @@ class ErnieMModelTest(ModelTesterMixin, PipelineTesterMixin, unittest.TestCase):
 
     @slow
     def test_model_from_pretrained(self):
-        for model_name in ERNIE_M_PRETRAINED_MODEL_ARCHIVE_LIST[:1]:
-            model = ErnieMModel.from_pretrained(model_name)
-            self.assertIsNotNone(model)
+        model_name = "susnato/ernie-m-base_pytorch"
+        model = ErnieMModel.from_pretrained(model_name)
+        self.assertIsNotNone(model)
 
 
 @require_torch

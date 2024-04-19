@@ -360,7 +360,7 @@ class GenerativeQAModule(BaseTransformer):
 
         loss_tensors = self._step(batch)
 
-        logs = {name: loss for name, loss in zip(self.loss_names, loss_tensors)}
+        logs = dict(zip(self.loss_names, loss_tensors))
         # tokens per batch
         tgt_pad_token_id = (
             self.tokenizer.generator.pad_token_id
@@ -434,7 +434,7 @@ class GenerativeQAModule(BaseTransformer):
         target: List[str] = self.ids_to_clean_text(batch["decoder_input_ids"])
         # print(preds,target)
         loss_tensors = self._step(batch)
-        base_metrics = {name: loss for name, loss in zip(self.loss_names, loss_tensors)}
+        base_metrics = dict(zip(self.loss_names, loss_tensors))
         gen_metrics: Dict = self.calc_generative_metrics(preds, target)
 
         summ_len = np.mean(lmap(len, generated_ids))
@@ -680,7 +680,7 @@ class GenerativeQAModule(BaseTransformer):
             type=int,
             default=1,
             help=(
-                "The number of retrieval actors to use when Ray is selected"
+                "The number of retrieval actors to use when Ray is selected "
                 "for the distributed retriever. Has no effect when "
                 "distributed_retriever is set to pytorch."
             ),
@@ -719,7 +719,7 @@ def main(args=None, model=None) -> GenerativeQAModule:
             ray.init(address=args.ray_address, namespace="rag")
         except (ConnectionError, ValueError):
             logger.warning(
-                "Connection to Ray cluster failed. Make sure a Ray"
+                "Connection to Ray cluster failed. Make sure a Ray "
                 "cluster is running by either using Ray's cluster "
                 "launcher (`ray up`) or by manually starting Ray on "
                 "each node via `ray start --head` for the head node "
