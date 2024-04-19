@@ -589,3 +589,109 @@ class TFForceTokensLogitsProcessor(TFLogitsProcessor):
             ),
         )
         return scores
+
+
+class TFWhisperTimeStampLogitsProcessor(TFLogitsProcessor):
+    r"""
+    Whisper specific Processor. This processor can be used to force a list of tokens. The processor will set their log
+    probs to `inf` so that they are sampled at their corresponding index.
+
+    Args:
+        generate_config (`GenerateConfig`):
+            The generate config used to generate the output. The following parameters are required:
+                eos_token_id (`int`, *optional*, defaults to 50257):
+                    The id of the *end-of-sequence* token.
+                no_timestamps_token_id (`int`, *optional*, defaults to 50363):
+                    The id of the `"<|notimestamps|>"` token.
+                max_initial_timestamp_index (`int`, *optional*, defaults to 1):
+                    Used to set the maximum value of the initial timestamp. This is used to prevent the model from
+                    predicting timestamps that are too far in the future.
+    """
+
+    def __init__(self, generate_config):  # support for the kwargs
+        self.eos_token_id = generate_config.eos_token_id
+        self.no_timestamps_token_id = generate_config.no_timestamps_token_id
+        self.timestamp_begin = generate_config.no_timestamps_token_id + 1
+
+        self.begin_index = len(generate_config.forced_decoder_ids) + 2
+        if generate_config.forced_decoder_ids[-1][1] == self.no_timestamps_token_id:
+            self.begin_index -= 1
+        self.max_initial_timestamp_index = generate_config.max_initial_timestamp_index
+
+    def __call__(self, input_ids, scores, cur_len):
+        def _un_force_token(current_token):
+            # scores[:,current_tokens ] = -float("inf")
+            batch_size = scores.shape[0]
+            new_scores = tf.identity(scores)
+            indices = tf.stack((tf.range(batch_size), tf.tile([current_token], [batch_size])), axis=1)
+            updates = tf.ones((batch_size,), dtype=scores.dtype) * -float("inf")
+            new_scores = tf.tensor_scatter_nd_update(new_scores, indices, updates)
+            return new_scores
+
+        def _force_tokens(current_tokens):
+            # scores[:, :] = -float("inf")
+            # scores[:,current_tokens ] = 0
+            batch_size = scores.shape[0]
+            new_scores = tf.ones_like(scores, dtype=scores.dtype) * -float("inf")
+            indices = tf.stack((tf.range(batch_size), tf.tile([current_tokens], [batch_size])), axis=1)
+            updates = tf.zeros((batch_size,), dtype=scores.dtype)
+            new_scores = tf.tensor_scatter_nd_update(new_scores, indices, updates)
+            return new_scores
+
+        # suppress <|notimestamps|> which is handled by without_timestamps
+        scores = _un_force_token(self.no_timestamps_token_id)  # scores[:, self.no_timestamps_token_id] = -float("inf")
+        if cur_len == self.begin_index - 1:
+            scores = _force_tokens(self.timestamp_begin)
+            return scores
+        # len(seq) == 1 corresponds to cur_len == self.begin_index + 2
+        last_was_timestamp = (cur_len >= self.begin_index + 2) & (input_ids[:, cur_len - 1] >= self.timestamp_begin)
+        penultimate_was_timestamp = (cur_len < self.begin_index + 3) | (
+            input_ids[:, cur_len - 2] >= self.timestamp_begin
+        )
+
+        # build mask for scores[k, self.timestamp_begin :] = -float("inf") when last_was_timestamp and penultimate_was_timestamp
+        row_mask_cannot_be_timestamp = last_was_timestamp & penultimate_was_timestamp
+        col_mask_cannot_be_timestamp = tf.concat(
+            (tf.zeros((self.timestamp_begin,), tf.bool), tf.ones((scores.shape[1] - self.timestamp_begin,), tf.bool)),
+            axis=0,
+        )
+        mask_cannot_be_timestamp = tf.broadcast_to(
+            tf.expand_dims(row_mask_cannot_be_timestamp, axis=1), scores.shape
+        ) & tf.broadcast_to(tf.expand_dims(col_mask_cannot_be_timestamp, axis=0), scores.shape)
+
+        # build mask for scores[k, : self.eos_token_id] = -float("inf") when last_was_timestamp and not penultimate_was_timestamp
+        row_mask_cannot_be_text = last_was_timestamp & ~penultimate_was_timestamp
+        col_mask_cannot_be_text = tf.concat(
+            (tf.ones((self.eos_token_id,), tf.bool), tf.zeros((scores.shape[1] - self.eos_token_id,), tf.bool)), axis=0
+        )
+        mask_cannot_be_text = tf.broadcast_to(
+            tf.expand_dims(row_mask_cannot_be_text, axis=1), scores.shape
+        ) & tf.broadcast_to(tf.expand_dims(col_mask_cannot_be_text, axis=0), scores.shape)
+
+        # merge masks and apply them
+        mask = mask_cannot_be_timestamp | mask_cannot_be_text
+        scores = tf.where(condition=mask, x=-float("inf"), y=scores)
+
+        if cur_len == self.begin_index and self.max_initial_timestamp_index is not None:
+            last_allowed = self.timestamp_begin + self.max_initial_timestamp_index
+            col_mask_cannot_be_sampled = tf.concat(
+                (tf.zeros((last_allowed,), tf.bool), tf.ones((scores.shape[1] - last_allowed,), tf.bool)),
+                axis=0,
+            )
+            mask_cannot_be_sampled = tf.broadcast_to(tf.expand_dims(col_mask_cannot_be_sampled, axis=0), scores.shape)
+            scores = tf.where(condition=mask_cannot_be_sampled, x=-float("inf"), y=scores)
+
+        logprobs = tf.math.log(stable_softmax(tf.cast(scores, dtype=tf.float32), axis=-1))
+        timestamp_logprob = tf.reduce_logsumexp(logprobs[:, self.timestamp_begin :], axis=-1)
+        max_text_token_logprob = tf.reduce_max(logprobs[:, : self.timestamp_begin], axis=-1)
+        row_mask_has_to_be_timestamp = timestamp_logprob > max_text_token_logprob
+        col_mask_has_to_be_timestamp = tf.concat(
+            (tf.ones((self.timestamp_begin,), tf.bool), tf.zeros((scores.shape[1] - self.timestamp_begin,), tf.bool)),
+            axis=0,
+        )
+        mask_has_to_be_timestamp = tf.broadcast_to(
+            tf.expand_dims(col_mask_has_to_be_timestamp, axis=0), scores.shape
+        ) & tf.broadcast_to(tf.expand_dims(row_mask_has_to_be_timestamp, axis=1), scores.shape)
+        scores = tf.where(condition=mask_has_to_be_timestamp, x=-float("inf"), y=scores)
+
+        return scores

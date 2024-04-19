@@ -890,9 +890,9 @@ class TFGenerationMixin:
 
         # 9. prepare distribution pre_processing samplers
         logits_processor = self._get_logits_processor(
+            logits_processor=logits_processor,
             generation_config=generation_config,
             input_ids_seq_length=input_ids_seq_length,
-            logits_processor=logits_processor,
         )
 
         # 10. go into different generation modes

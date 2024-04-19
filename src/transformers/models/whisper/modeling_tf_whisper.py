@@ -26,7 +26,7 @@ import tensorflow as tf
 
 from ...activations_tf import get_tf_activation
 from ...generation.configuration_utils import GenerationConfig
-from ...generation.tf_logits_process import TFLogitsProcessorList
+from ...generation.tf_logits_process import TFLogitsProcessorList, TFWhisperTimeStampLogitsProcessor
 from ...modeling_tf_outputs import (
     TFBaseModelOutput,
     TFBaseModelOutputWithPastAndCrossAttentions,
@@ -1574,8 +1574,8 @@ class TFWhisperForConditionalGeneration(TFWhisperPreTrainedModel, TFCausalLangua
         if return_timestamps is not None:
             if not hasattr(generation_config, "no_timestamps_token_id"):
                 raise ValueError(
-                    "You are trying to return timestamps, but the generation config is not properly set. "
-                    "Make sure to initialize the generation config with the correct attributes that are needed such as `no_timestamps_token_id`. "
+                    "You are trying to return timestamps, but the generation config is not properly set."
+                    "Make sure to initialize the generation config with the correct attributes that are needed such as `no_timestamps_token_id`."
                     "For more details on how to generate the approtiate config, refer to https://github.com/huggingface/transformers/issues/21878#issuecomment-1451902363"
                 )
 
@@ -1609,6 +1609,7 @@ class TFWhisperForConditionalGeneration(TFWhisperPreTrainedModel, TFCausalLangua
                     language_token = generation_config.language
                 elif generation_config.language in TO_LANGUAGE_CODE.keys():
                     language_token = f"<|{TO_LANGUAGE_CODE[generation_config.language]}|>"
+
                 elif generation_config.language in TO_LANGUAGE_CODE.values():
                     language_token = f"<|{generation_config.language}|>"
                 else:
@@ -1673,10 +1674,11 @@ class TFWhisperForConditionalGeneration(TFWhisperPreTrainedModel, TFCausalLangua
             forced_decoder_ids = [(rank + 1, token) for rank, token in enumerate(forced_decoder_ids)]
             generation_config.forced_decoder_ids = forced_decoder_ids
 
-        # TODO: Implement `WhisperTimeStampLogitsProcessor`.
         if generation_config.return_timestamps:
-            # logits_processor = [TFWhisperTimeStampLogitsProcessor(generation_config)]
-            raise ValueError("`TFWhisperForConditionalGeneration` doesn't support returning the timestamps yet.")
+            if logits_processor is not None:
+                logits_processor += [TFWhisperTimeStampLogitsProcessor(generation_config)]
+            else:
+                logits_processor = [TFWhisperTimeStampLogitsProcessor(generation_config)]
 
         if return_token_timestamps:
             kwargs["output_attentions"] = True

@@ -1014,7 +1014,7 @@ class TFRagTokenForGeneration(TFRagPreTrainedModel, TFCausalLanguageModelingLoss
         doc_scores=None,
         n_docs=None,
         generation_config=None,
-        logits_processor=TFLogitsProcessorList(),
+        logits_processor: Optional[TFLogitsProcessorList] = TFLogitsProcessorList(),
         **kwargs,
     ):
         """
